@@ -1,1 +1,3 @@
-
+data/original_audio/
+data/processed_audio/
+*.wav
