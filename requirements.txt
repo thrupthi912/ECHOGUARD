@@ -1,0 +1,39 @@
+# Core ML
+torch
+torchaudio
+torchvision
+
+# Hugging Face
+transformers
+datasets
+tokenizers
+accelerate
+
+# Whisper
+openai-whisper
+
+# Audio processing
+librosa
+soundfile
+resampy
+
+# Numerical computing
+numpy
+scipy
+pandas
+
+# Machine Learning
+scikit-learn
+
+# Progress bars
+tqdm
+
+# Configuration
+PyYAML
+
+# Visualization (optional, useful for evaluation)
+matplotlib
+
+# Jupyter (optional, for notebooks)
+notebook
+ipykernel
