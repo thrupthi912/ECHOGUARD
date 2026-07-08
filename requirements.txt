@@ -37,3 +37,9 @@ matplotlib
 # Jupyter (optional, for notebooks)
 notebook
 ipykernel
+
+# Spoof Detection
+torch>=1.6.0
+torchcontrib
+numpy
+soundfile
