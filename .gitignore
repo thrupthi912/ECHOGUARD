@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python cache
 __pycache__/
 *.pyc
@@ -23,3 +24,7 @@ exp_result/
 
 # VS Code
 .vscode/
+=======
+data/original_audio/
+data/processed_audio/
+*.wav
