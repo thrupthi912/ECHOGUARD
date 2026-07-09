@@ -41,6 +41,11 @@ LA/
 echoguard/outputs/
 exp_result/
 
+# ── Generated test artifacts ──────────────────────────────────────────────────
+echoguard/audio/_test_tone.wav
+echoguard/transcripts/
+echoguard/diarized_transcripts/
+
 # ── FAISS indexes ────────────────────────────────────────────────────────────
 *.faiss
 *.index
