@@ -1,0 +1,88 @@
+# EchoGuard — default configuration
+# All paths are relative to the project root unless marked absolute.
+
+project:
+  name: "EchoGuard"
+  version: "0.1.0"
+
+paths:
+  audio_dir: "echoguard/audio"
+  transcripts_dir: "echoguard/transcripts"
+  diarized_transcripts_dir: "echoguard/diarized_transcripts"
+  outputs_dir: "echoguard/outputs"
+  datasets_dir: "echoguard/datasets"
+
+whisper:
+  model_name: "base"          # tiny | base | small | medium | large
+  language: null              # null = auto-detect
+  word_timestamps: true       # required for speaker-aligned transcripts
+
+speaker_diarization:
+  # HuggingFace model ID — requires accepting pyannote terms of use
+  model_id: "pyannote/speaker-diarization-3.1"
+  # HuggingFace token — set via HF_TOKEN env variable or fill in here (do NOT commit tokens)
+  hf_token: null
+  # Minimum segment duration in seconds to keep
+  min_segment_duration: 0.5
+
+emotion:
+  model_id: "superb/wav2vec2-base-superb-er"
+  num_labels: 8
+  sample_rate: 16000
+  labels:
+    - neutral
+    - calm
+    - happy
+    - sad
+    - angry
+    - fearful
+    - disgust
+    - surprised
+  # Weights for composite stress score: fearful + w_angry*angry + w_sad*sad
+  stress_weights:
+    fearful: 1.0
+    angry: 0.8
+    sad: 0.4
+
+deepfake:
+  # Path to a trained AASIST .pth weight file (relative to project root)
+  model_weights: null          # e.g. "echoguard/models/deepfake/AASIST.pth"
+  architecture: "AASIST"      # AASIST | AASIST-L | RawNet2Spoof | RawNetGatSpoofST
+  sample_rate: 16000
+  max_samples: 64600           # ~4 seconds at 16 kHz
+
+keyword_detection:
+  # List of scam-indicator keywords/phrases (case-insensitive)
+  keywords:
+    - "bank account"
+    - "credit card"
+    - "social security"
+    - "wire transfer"
+    - "OTP"
+    - "one-time password"
+    - "blocked"
+    - "suspended"
+    - "arrested"
+    - "warrant"
+    - "irs"
+    - "refund"
+    - "gift card"
+    - "bitcoin"
+    - "urgent"
+    - "verify your identity"
+    - "confirm your details"
+    - "press 1"
+    - "do not hang up"
+
+context:
+  # FAISS index settings for context retrieval
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  top_k: 5
+
+fusion:
+  # Weights for final scam probability score (must sum to 1.0)
+  weights:
+    keyword: 0.25
+    emotion: 0.25
+    deepfake: 0.25
+    context: 0.25

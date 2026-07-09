@@ -1,45 +1,48 @@
-# Core ML
-torch
-torchaudio
-torchvision
+# EchoGuard — Python dependencies
+# Install with: pip install -r requirements.txt
+#
+# Note: torch, torchaudio and torchvision installation is hardware-dependent.
+# For CUDA support visit https://pytorch.org/get-started/locally/
+# For CPU-only (macOS / testing):
+#   pip install torch==2.3.0 torchaudio==2.3.0
 
-# Hugging Face
-transformers
-datasets
-tokenizers
-accelerate
+# ── Core deep learning ────────────────────────────────────────────────────────
+torch>=2.0.0
+torchaudio>=2.0.0
 
-# Whisper
-openai-whisper
+# ── Hugging Face ecosystem ────────────────────────────────────────────────────
+transformers>=4.38.0
+accelerate>=0.27.0
+tokenizers>=0.15.0
 
-# Audio processing
-librosa
-soundfile
-resampy
+# ── Speech-to-text (Whisper) ──────────────────────────────────────────────────
+openai-whisper>=20231117
 
-# Numerical computing
-numpy
-scipy
-pandas
+# ── Speaker diarization ───────────────────────────────────────────────────────
+pyannote.audio>=3.1.0
 
-# Machine Learning
-scikit-learn
+# ── Audio processing ──────────────────────────────────────────────────────────
+librosa>=0.10.0
+soundfile>=0.12.0
+resampy>=0.4.2
 
-# Progress bars
-tqdm
+# ── Numerical / scientific ───────────────────────────────────────────────────
+numpy>=1.24.0
+scipy>=1.10.0
+pandas>=2.0.0
 
-# Configuration
-PyYAML
+# ── Machine learning (classic) ───────────────────────────────────────────────
+scikit-learn>=1.3.0
 
-# Visualization (optional, useful for evaluation)
-matplotlib
+# ── Context retrieval ────────────────────────────────────────────────────────
+faiss-cpu>=1.7.4            # use faiss-gpu if CUDA is available
+sentence-transformers>=2.6.0
 
-# Jupyter (optional, for notebooks)
-notebook
-ipykernel
+# ── Configuration ────────────────────────────────────────────────────────────
+PyYAML>=6.0.1
 
-# Spoof Detection
-torch>=1.6.0
-torchcontrib
-numpy
-soundfile
+# ── Utilities ────────────────────────────────────────────────────────────────
+tqdm>=4.65.0
+
+# ── Visualization (optional) ─────────────────────────────────────────────────
+matplotlib>=3.7.0

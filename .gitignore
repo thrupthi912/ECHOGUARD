@@ -1,30 +1,60 @@
-<<<<<<< HEAD
-# Python cache
+# ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
 
-# Virtual environments
+# ── Virtual environments ──────────────────────────────────────────────────────
 venv/
-venv311/
+venv*/
+.venv/
+env/
 
-# Datasets
+# ── Jupyter / IPython ─────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Model weights (large binary files) ───────────────────────────────────────
+*.pth
+*.pt
+*.ckpt
+*.bin
+*.safetensors
+
+# ── Audio data ────────────────────────────────────────────────────────────────
+echoguard/audio/
+*.wav
+*.mp3
+*.flac
+*.ogg
+
+# ── Datasets ─────────────────────────────────────────────────────────────────
 datasets/
 LA/
 *.zip
 
-# Experiment outputs
+# ── Outputs / experiment results ──────────────────────────────────────────────
+echoguard/outputs/
 exp_result/
 
-# Model weights
-*.pth
-*.pt
+# ── FAISS indexes ────────────────────────────────────────────────────────────
+*.faiss
+*.index
 
-# macOS
+# ── HuggingFace cache ────────────────────────────────────────────────────────
+.cache/
+
+# ── OS / IDE ──────────────────────────────────────────────────────────────────
 .DS_Store
-
-# VS Code
 .vscode/
-=======
-data/original_audio/
-data/processed_audio/
-*.wav
+.idea/
+*.swp
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+.env
+*.env
+secrets.yaml

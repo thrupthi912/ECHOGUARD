@@ -1,0 +1,39 @@
+# AASIST model architecture configuration
+# Converted from the original AASIST.conf / AASIST-L.conf JSON configs.
+# Source: https://github.com/clovaai/aasist  (NAVER Corp., MIT License)
+
+# ── Full AASIST ──────────────────────────────────────────────────────────────
+AASIST:
+  nb_samp: 64600
+  first_conv: 128
+  filts: [70, [1, 32], [32, 32], [32, 64], [64, 64]]
+  gat_dims: [64, 32]
+  pool_ratios: [0.5, 0.7, 0.5, 0.5]
+  temperatures: [2.0, 2.0, 100.0, 100.0]
+
+# ── Lightweight AASIST-L ─────────────────────────────────────────────────────
+AASIST-L:
+  nb_samp: 64600
+  first_conv: 128
+  filts: [70, [1, 32], [32, 32], [32, 24], [24, 24]]
+  gat_dims: [24, 32]
+  pool_ratios: [0.4, 0.5, 0.7, 0.5]
+  temperatures: [2.0, 2.0, 100.0, 100.0]
+
+# ── RawNet2 baseline ─────────────────────────────────────────────────────────
+RawNet2Spoof:
+  nb_samp: 64600
+  first_conv: 1024
+  in_channels: 1
+  filts: [20, [20, 20], [20, 128], [128, 128]]
+  blocks: [2, 4]
+  nb_fc_node: 1024
+  gru_node: 1024
+  nb_gru_layer: 3
+  nb_classes: 2
+
+# ── RawGAT-ST baseline ───────────────────────────────────────────────────────
+RawNetGatSpoofST:
+  nb_samp: 64600
+  first_conv: 128
+  filts: [70, [1, 32], [32, 32], [32, 64], [64, 64]]
