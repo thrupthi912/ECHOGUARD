@@ -88,20 +88,27 @@ def run_pipeline(
 
     else:
         print("[1/4] Running speaker diarization + Whisper...")
-        from echoguard.modules.whisper import diarized_transcribe
+        from echoguard.modules.whisper import diarized_transcribe, transcribe
         from echoguard.utils.text import format_diarized_transcript
 
         token = hf_token or os.environ.get("HF_TOKEN")
-        diarized_segments = diarized_transcribe(
-            audio_path,
-            model_name=whisper_model,
-            save=True,
-            hf_token=token,
-            num_speakers=num_speakers,
-        )
-        results["diarized_segments"] = diarized_segments
-        results["transcript"] = format_diarized_transcript(diarized_segments)
-        transcript = " ".join(s["text"] for s in diarized_segments)
+        try:
+            diarized_segments = diarized_transcribe(
+                audio_path,
+                model_name=whisper_model,
+                save=True,
+                hf_token=token,
+                num_speakers=num_speakers,
+            )
+            results["diarized_segments"] = diarized_segments
+            results["transcript"] = format_diarized_transcript(diarized_segments)
+            transcript = " ".join(s["text"] for s in diarized_segments)
+        except (ImportError, ValueError) as exc:
+            print(f"    → [DIARIZATION SKIPPED] {exc}")
+            print("    → Falling back to plain Whisper transcription...")
+            transcript = transcribe(audio_path, model_name=whisper_model, save=True)
+            results["transcript"] = transcript
+            results["diarized_segments"] = []
 
     print(f"    → Transcript length: {len(transcript)} characters")
 
@@ -119,8 +126,8 @@ def run_pipeline(
     # ── 3. Emotion Analysis ───────────────────────────────────────────────────
     if not skip_emotion:
         print("[3/4] Analyzing emotion...")
-        from echoguard.modules.emotion import analyze_emotion
         try:
+            from echoguard.modules.emotion import analyze_emotion
             emotion_result = analyze_emotion(audio_path)
             results["emotion"] = emotion_result
             module_scores["emotion"] = emotion_result
@@ -129,6 +136,10 @@ def run_pipeline(
                 f"(confidence={emotion_result['confidence']}, "
                 f"stress={emotion_result['stress_score']})"
             )
+        except ImportError as exc:
+            print(f"    → [SKIPPED] Missing package: {exc}")
+            print("    → Fix: pip install librosa soundfile resampy")
+            results["emotion"] = None
         except Exception as exc:
             print(f"    → [SKIPPED] {exc}")
             results["emotion"] = None
@@ -157,11 +168,18 @@ def run_pipeline(
 
     # ── Context Retrieval (bonus, no step counter) ────────────────────────────
     if not skip_context:
-        from echoguard.modules.context import retrieve_context
-        context_results = retrieve_context(transcript, index_dir=context_index_dir)
-        results["context"] = context_results
-        if context_results:
-            module_scores["context"] = context_results
+        try:
+            from echoguard.modules.context import retrieve_context
+            context_results = retrieve_context(transcript, index_dir=context_index_dir)
+            results["context"] = context_results
+            if context_results:
+                module_scores["context"] = context_results
+        except ImportError as exc:
+            print(f"    → [Context SKIPPED] Missing package: {exc}")
+            results["context"] = []
+        except Exception as exc:
+            print(f"    → [Context SKIPPED] {exc}")
+            results["context"] = []
     else:
         results["context"] = []
 
