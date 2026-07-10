@@ -44,5 +44,8 @@ PyYAML>=6.0.1
 # ── Utilities ────────────────────────────────────────────────────────────────
 tqdm>=4.65.0
 
-# ── Visualization (optional) ─────────────────────────────────────────────────
+# ── Audio enhancement / noise cancellation ───────────────────────────────────
+speechbrain>=1.0.0              # neural spectral-mask enhancement (SpeechBrain)
+noisereduce>=3.0.0              # classical spectral subtraction fallback
+
 matplotlib>=3.7.0

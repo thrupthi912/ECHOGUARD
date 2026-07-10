@@ -11,15 +11,19 @@ Full pipeline
 -------------
     Audio
       │
-      ├─► Speaker Diarization (pyannote)
+      ├─► [0] Noise Cancellation               [optional — skippable]
+      │         SpeechBrain (neural) or DSP fallback
+      │         └─► Enhanced audio passed to all downstream modules
+      │
+      ├─► [1] Speaker Diarization (pyannote)
       │         └─► Whisper (word timestamps)
       │                   └─► Diarized transcript  ──► Keyword Detection
       │
-      ├─► Emotion Analysis (wav2vec2)
+      ├─► [2] Emotion Analysis (wav2vec2)
       │
-      ├─► Deepfake Detection (AASIST)          [optional — needs .pth weights]
+      ├─► [3] Deepfake Detection (AASIST)      [optional — needs .pth weights]
       │
-      ├─► Context Retrieval (FAISS)            [optional — needs saved index]
+      ├─► [4] Context Retrieval (FAISS)        [optional — needs saved index]
       │
       └─► Score Fusion  ──► Verdict (SCAM / SUSPICIOUS / BENIGN)
 """
@@ -44,10 +48,12 @@ def run_pipeline(
     whisper_model: str = "base",
     hf_token: Optional[str] = None,
     num_speakers: Optional[int] = None,
+    skip_noise_cancel: bool = False,
     skip_diarization: bool = False,
     skip_emotion: bool = False,
     skip_deepfake: bool = False,
     skip_context: bool = False,
+    noise_cancel_strategy: str = "auto",
     deepfake_weights: Optional[str] = None,
     context_index_dir: Optional[str] = None,
     output_dir: str | Path = "echoguard/outputs",
@@ -65,6 +71,9 @@ def run_pipeline(
         Falls back to the ``HF_TOKEN`` environment variable.
     num_speakers:
         Hint for the number of speakers in the call.
+    skip_noise_cancel:
+        Skip noise cancellation (step 0). When skipped the original audio
+        is passed directly to all downstream modules.
     skip_diarization:
         If ``True``, run plain Whisper transcription instead of
         speaker-diarized transcription.
@@ -74,6 +83,10 @@ def run_pipeline(
         Skip deepfake detection (useful when no weights are available).
     skip_context:
         Skip FAISS context retrieval.
+    noise_cancel_strategy:
+        Strategy for noise cancellation: ``"auto"`` | ``"speechbrain"`` |
+        ``"dsp"``.  ``"auto"`` uses SpeechBrain if installed, otherwise
+        falls back to the classical DSP pipeline.
     deepfake_weights:
         Path to AASIST .pth weights file.
     context_index_dir:
@@ -96,6 +109,31 @@ def run_pipeline(
 
     results: Dict = {"audio_file": str(audio_path)}
     module_scores: Dict = {}
+
+    # ── 0. Noise Cancellation ─────────────────────────────────────────────────
+    # Runs before all other modules so Whisper, wav2vec2, and AASIST all
+    # receive a cleaner audio signal.
+    if not skip_noise_cancel:
+        print("[0/5] Running noise cancellation...")
+        from echoguard.modules.noise_cancellation import enhance_audio
+        try:
+            enhanced_path = enhance_audio(
+                audio_path,
+                strategy=noise_cancel_strategy,
+                output_dir=output_dir,
+            )
+            audio_path = Path(enhanced_path)
+            results["noise_cancellation"] = {
+                "enhanced_file": str(audio_path),
+                "strategy": noise_cancel_strategy,
+            }
+            print(f"    → Enhanced audio saved to: {audio_path}")
+        except Exception as exc:
+            print(f"    → [SKIPPED] Noise cancellation failed: {exc}")
+            results["noise_cancellation"] = None
+    else:
+        print("[0/5] Noise cancellation skipped.")
+        results["noise_cancellation"] = None
 
     # ── 1. Transcription ─────────────────────────────────────────────────────
     if skip_diarization:
@@ -234,6 +272,8 @@ Examples:
   python main.py --audio echoguard/audio/call001.wav
   python main.py --audio call001.wav --model small --speakers 2
   python main.py --audio call001.wav --skip-deepfake --skip-diarization
+  python main.py --audio call001.wav --noise-cancel-strategy dsp
+  python main.py --audio call001.wav --skip-noise-cancel
         """,
     )
     parser.add_argument(
@@ -281,6 +321,18 @@ Examples:
         help="Output directory for results (default: echoguard/outputs).",
     )
     parser.add_argument(
+        "--skip-noise-cancel",
+        action="store_true",
+        help="Skip noise cancellation (step 0).",
+    )
+    parser.add_argument(
+        "--noise-cancel-strategy",
+        default="auto",
+        metavar="STRATEGY",
+        choices=["auto", "speechbrain", "dsp"],
+        help="Noise cancellation strategy: auto | speechbrain | dsp (default: auto).",
+    )
+    parser.add_argument(
         "--skip-diarization",
         action="store_true",
         help="Skip speaker diarization and use plain Whisper transcription.",
@@ -313,6 +365,8 @@ def main() -> None:
         whisper_model=args.model,
         hf_token=args.hf_token,
         num_speakers=args.speakers,
+        skip_noise_cancel=args.skip_noise_cancel,
+        noise_cancel_strategy=args.noise_cancel_strategy,
         skip_diarization=args.skip_diarization,
         skip_emotion=args.skip_emotion,
         skip_deepfake=args.skip_deepfake,
