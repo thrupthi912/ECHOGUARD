@@ -83,7 +83,7 @@ def _load_pipeline(model_id: str, hf_token: Optional[str]) -> object:
             "the model terms at https://hf.co/pyannote/speaker-diarization-3.1"
         )
 
-    _pipeline = Pipeline.from_pretrained(model_id, use_auth_token=token)
+    _pipeline = Pipeline.from_pretrained(model_id, token=token)
     return _pipeline
 
 
