@@ -59,6 +59,12 @@ def _enhance_speechbrain(
     Path
         Path to the enhanced WAV file.
     """
+    # Apply SSL patch before SpeechBrain makes any network call
+    try:
+        import echoguard.utils.ssl_patch  # noqa: F401
+    except Exception:
+        pass
+
     # Support both old and new speechbrain import paths
     try:
         from speechbrain.inference.enhancement import SpectralMaskEnhancement

@@ -37,6 +37,10 @@ import sys
 from pathlib import Path
 from typing import Dict, Optional
 
+# Disable SSL cert verification for corporate/university proxy networks.
+# Must be imported before any huggingface_hub / requests calls.
+import echoguard.utils.ssl_patch  # noqa: F401
+
 
 # ---------------------------------------------------------------------------
 # Pipeline
@@ -53,7 +57,7 @@ def run_pipeline(
     skip_emotion: bool = False,
     skip_deepfake: bool = False,
     skip_context: bool = False,
-    noise_cancel_strategy: str = "auto",
+    noise_cancel_strategy: str = "dsp",
     deepfake_weights: Optional[str] = None,
     context_index_dir: Optional[str] = None,
     output_dir: str | Path = "echoguard/outputs",
@@ -327,10 +331,10 @@ Examples:
     )
     parser.add_argument(
         "--noise-cancel-strategy",
-        default="auto",
+        default="dsp",
         metavar="STRATEGY",
         choices=["auto", "speechbrain", "dsp"],
-        help="Noise cancellation strategy: auto | speechbrain | dsp (default: auto).",
+        help="Noise cancellation strategy: auto | speechbrain | dsp (default: dsp).",
     )
     parser.add_argument(
         "--skip-diarization",
