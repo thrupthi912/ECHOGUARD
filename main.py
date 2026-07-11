@@ -5,27 +5,27 @@ Usage
 -----
     python main.py --audio echoguard/audio/call001.wav
     python main.py --audio call001.wav --model small --speakers 2
-    python main.py --audio call001.wav --skip-deepfake  # no weights needed
+    python main.py --audio call001.wav --skip-deepfake
 
 Full pipeline
 -------------
     Audio
       │
       ├─► [0] Noise Cancellation               [optional — skippable]
-      │         SpeechBrain (neural) or DSP fallback
+      │         DSP (spectral subtraction + bandpass + normalise)
       │         └─► Enhanced audio passed to all downstream modules
       │
       ├─► [1] Speaker Diarization (pyannote)
       │         └─► Whisper (word timestamps)
-      │                   └─► Diarized transcript  ──► Keyword Detection
+      │                   └─► Diarized transcript ──► Keyword Detection
       │
       ├─► [2] Emotion Analysis (wav2vec2)
       │
-      ├─► [3] Deepfake Detection (AASIST)      [optional — needs .pth weights]
+      ├─► [3] Deepfake Detection (AASIST)      [needs .pth weights]
       │
-      ├─► [4] Context Retrieval (FAISS)        [optional — needs saved index]
+      ├─► [4] Context Retrieval (FAISS)        [needs saved index]
       │
-      └─► Score Fusion  ──► Verdict (SCAM / SUSPICIOUS / BENIGN)
+      └─► Score Fusion ──► Verdict (SCAM / SUSPICIOUS / BENIGN)
 """
 
 from __future__ import annotations
@@ -40,11 +40,6 @@ from typing import Dict, Optional
 # Disable SSL cert verification for corporate/university proxy networks.
 # Must be imported before any huggingface_hub / requests calls.
 import echoguard.utils.ssl_patch  # noqa: F401
-
-
-# ---------------------------------------------------------------------------
-# Pipeline
-# ---------------------------------------------------------------------------
 
 
 def run_pipeline(
@@ -66,43 +61,24 @@ def run_pipeline(
 
     Parameters
     ----------
-    audio_path:
-        Path to the input WAV file.
-    whisper_model:
-        Whisper model size (tiny | base | small | medium | large).
-    hf_token:
-        HuggingFace token for pyannote speaker diarization.
-        Falls back to the ``HF_TOKEN`` environment variable.
-    num_speakers:
-        Hint for the number of speakers in the call.
-    skip_noise_cancel:
-        Skip noise cancellation (step 0). When skipped the original audio
-        is passed directly to all downstream modules.
-    skip_diarization:
-        If ``True``, run plain Whisper transcription instead of
-        speaker-diarized transcription.
-    skip_emotion:
-        Skip emotion analysis.
-    skip_deepfake:
-        Skip deepfake detection (useful when no weights are available).
-    skip_context:
-        Skip FAISS context retrieval.
-    noise_cancel_strategy:
-        Strategy for noise cancellation: ``"auto"`` | ``"speechbrain"`` |
-        ``"dsp"``.  ``"auto"`` uses SpeechBrain if installed, otherwise
-        falls back to the classical DSP pipeline.
-    deepfake_weights:
-        Path to AASIST .pth weights file.
-    context_index_dir:
-        Path to a saved FAISS index directory.
-    output_dir:
-        Root directory for all output files.
+    audio_path : Path to the input WAV file.
+    whisper_model : Whisper model size (tiny | base | small | medium | large).
+    hf_token : HuggingFace token for pyannote. Falls back to HF_TOKEN env var.
+    num_speakers : Hint for number of speakers in the call.
+    skip_noise_cancel : Skip noise cancellation (step 0).
+    skip_diarization : Use plain Whisper instead of speaker-diarized transcript.
+    skip_emotion : Skip wav2vec2 emotion analysis.
+    skip_deepfake : Skip AASIST deepfake detection.
+    skip_context : Skip FAISS context retrieval.
+    noise_cancel_strategy : "dsp" | "speechbrain" | "auto" (default: dsp).
+    deepfake_weights : Path to AASIST .pth weights file.
+    context_index_dir : Path to a saved FAISS index directory.
+    output_dir : Root directory for all output files.
 
     Returns
     -------
     dict
-        Full pipeline result including transcript, per-module outputs, and
-        the final fusion verdict.
+        Full pipeline result with transcript, per-module outputs, and verdict.
     """
     audio_path = Path(audio_path)
     output_dir = Path(output_dir)
@@ -118,7 +94,7 @@ def run_pipeline(
     # Runs before all other modules so Whisper, wav2vec2, and AASIST all
     # receive a cleaner audio signal.
     if not skip_noise_cancel:
-        print("[0/5] Running noise cancellation...")
+        print("[0/4] Running noise cancellation...")
         from echoguard.modules.noise_cancellation import enhance_audio
         try:
             enhanced_path = enhance_audio(
@@ -136,42 +112,44 @@ def run_pipeline(
             print(f"    → [SKIPPED] Noise cancellation failed: {exc}")
             results["noise_cancellation"] = None
     else:
-        print("[0/5] Noise cancellation skipped.")
+        print("[0/4] Noise cancellation skipped.")
         results["noise_cancellation"] = None
 
     # ── 1. Transcription ─────────────────────────────────────────────────────
     if skip_diarization:
-        print("[1/5] Transcribing with Whisper (plain mode)...")
+        print("[1/4] Transcribing with Whisper (plain mode)...")
         from echoguard.modules.whisper import transcribe
-        transcript = transcribe(
-            audio_path,
-            model_name=whisper_model,
-            save=True,
-        )
+        transcript = transcribe(audio_path, model_name=whisper_model, save=True)
         results["transcript"] = transcript
         results["diarized_segments"] = []
-
     else:
-        print("[1/5] Running speaker diarization + Whisper...")
-        from echoguard.modules.whisper import diarized_transcribe
+        print("[1/4] Running speaker diarization + Whisper...")
+        from echoguard.modules.whisper import diarized_transcribe, transcribe
         from echoguard.utils.text import format_diarized_transcript
 
         token = hf_token or os.environ.get("HF_TOKEN")
-        diarized_segments = diarized_transcribe(
-            audio_path,
-            model_name=whisper_model,
-            save=True,
-            hf_token=token,
-            num_speakers=num_speakers,
-        )
-        results["diarized_segments"] = diarized_segments
-        results["transcript"] = format_diarized_transcript(diarized_segments)
-        transcript = " ".join(s["text"] for s in diarized_segments)
+        try:
+            diarized_segments = diarized_transcribe(
+                audio_path,
+                model_name=whisper_model,
+                save=True,
+                hf_token=token,
+                num_speakers=num_speakers,
+            )
+            results["diarized_segments"] = diarized_segments
+            results["transcript"] = format_diarized_transcript(diarized_segments)
+            transcript = " ".join(s["text"] for s in diarized_segments)
+        except (ImportError, ValueError) as exc:
+            print(f"    → [DIARIZATION SKIPPED] {exc}")
+            print("    → Falling back to plain Whisper transcription...")
+            transcript = transcribe(audio_path, model_name=whisper_model, save=True)
+            results["transcript"] = transcript
+            results["diarized_segments"] = []
 
     print(f"    → Transcript length: {len(transcript)} characters")
 
     # ── 2. Keyword Detection ─────────────────────────────────────────────────
-    print("[2/5] Running keyword detection...")
+    print("[2/4] Running keyword detection...")
     from echoguard.modules.keyword_detection import detect_keywords
     keyword_result = detect_keywords(transcript)
     results["keyword_detection"] = keyword_result
@@ -183,29 +161,34 @@ def run_pipeline(
 
     # ── 3. Emotion Analysis ───────────────────────────────────────────────────
     if not skip_emotion:
-        print("[3/5] Analyzing emotion...")
-        from echoguard.modules.emotion import analyze_emotion
-        emotion_result = analyze_emotion(audio_path)
-        results["emotion"] = emotion_result
-        module_scores["emotion"] = emotion_result
-        print(
-            f"    → {emotion_result['predicted_emotion']} "
-            f"(confidence={emotion_result['confidence']}, "
-            f"stress={emotion_result['stress_score']})"
-        )
+        print("[3/4] Analyzing emotion...")
+        try:
+            from echoguard.modules.emotion import analyze_emotion
+            emotion_result = analyze_emotion(audio_path)
+            results["emotion"] = emotion_result
+            module_scores["emotion"] = emotion_result
+            print(
+                f"    → {emotion_result['predicted_emotion']} "
+                f"(confidence={emotion_result['confidence']}, "
+                f"stress={emotion_result['stress_score']})"
+            )
+        except ImportError as exc:
+            print(f"    → [SKIPPED] Missing package: {exc}")
+            print("    → Fix: pip install librosa soundfile resampy")
+            results["emotion"] = None
+        except Exception as exc:
+            print(f"    → [SKIPPED] {exc}")
+            results["emotion"] = None
     else:
-        print("[3/5] Emotion analysis skipped.")
+        print("[3/4] Emotion analysis skipped.")
         results["emotion"] = None
 
     # ── 4. Deepfake Detection ─────────────────────────────────────────────────
     if not skip_deepfake:
-        print("[4/5] Running deepfake detection...")
+        print("[4/4] Running deepfake detection...")
         from echoguard.modules.deepfake import detect_deepfake
         try:
-            deepfake_result = detect_deepfake(
-                audio_path,
-                weights_path=deepfake_weights,
-            )
+            deepfake_result = detect_deepfake(audio_path, weights_path=deepfake_weights)
             results["deepfake"] = deepfake_result
             module_scores["deepfake"] = deepfake_result
             print(
@@ -216,25 +199,24 @@ def run_pipeline(
             print(f"    → [SKIPPED] {exc}")
             results["deepfake"] = None
     else:
-        print("[4/5] Deepfake detection skipped.")
+        print("[4/4] Deepfake detection skipped.")
         results["deepfake"] = None
 
-    # ── 5. Context Retrieval ──────────────────────────────────────────────────
+    # ── Context Retrieval ────────────────────────────────────────────────────
     if not skip_context:
-        print("[5/5] Running context retrieval...")
-        from echoguard.modules.context import retrieve_context
-        context_results = retrieve_context(
-            transcript,
-            index_dir=context_index_dir,
-        )
-        results["context"] = context_results
-        if context_results:
-            module_scores["context"] = context_results
-            print(f"    → Retrieved {len(context_results)} nearest neighbours")
-        else:
-            print("    → [SKIPPED] No FAISS index found.")
+        try:
+            from echoguard.modules.context import retrieve_context
+            context_results = retrieve_context(transcript, index_dir=context_index_dir)
+            results["context"] = context_results
+            if context_results:
+                module_scores["context"] = context_results
+        except ImportError as exc:
+            print(f"    → [Context SKIPPED] Missing package: {exc}")
+            results["context"] = []
+        except Exception as exc:
+            print(f"    → [Context SKIPPED] {exc}")
+            results["context"] = []
     else:
-        print("[5/5] Context retrieval skipped.")
         results["context"] = []
 
     # ── Fusion ────────────────────────────────────────────────────────────────
@@ -244,17 +226,25 @@ def run_pipeline(
     results["fusion"] = fusion_result
 
     verdict = fusion_result["verdict"]
-    prob = fusion_result["scam_probability"]
-    conf = fusion_result["confidence"]
+    prob    = fusion_result["scam_probability"]
+    conf    = fusion_result["confidence"]
+    scores  = fusion_result["component_scores"]
+
     print(f"\n{'=' * 50}")
-    print(f"  VERDICT : {verdict}")
-    print(f"  SCORE   : {prob:.2%}")
-    print(f"  CONFIDENCE: {conf}")
+    print(f"  VERDICT    : {verdict}")
+    print(f"  SCORE      : {prob:.2%}")
+    print(f"  CONFIDENCE : {conf}")
+    print(f"  ── Component Scores ──────────────────")
+    for mod, score in scores.items():
+        print(f"    {mod:<12}: {score:.2%}")
     print(f"{'=' * 50}\n")
 
     # ── Save full results ─────────────────────────────────────────────────────
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_file = output_dir / f"{audio_path.stem}_result.json"
+    safe_stem = "".join(
+        c if c.isalnum() or c in "-_. " else "_" for c in audio_path.stem
+    ).strip()
+    out_file = output_dir / f"{safe_stem}_result.json"
     with open(out_file, "w", encoding="utf-8") as fh:
         json.dump(results, fh, indent=2, ensure_ascii=False)
     print(f"Full results saved to: {out_file}")
@@ -266,104 +256,59 @@ def run_pipeline(
 # CLI
 # ---------------------------------------------------------------------------
 
-
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="EchoGuard — Multimodal Phone Scam Detection",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python main.py --audio echoguard/audio/call001.wav
-  python main.py --audio call001.wav --model small --speakers 2
-  python main.py --audio call001.wav --skip-deepfake --skip-diarization
-  python main.py --audio call001.wav --noise-cancel-strategy dsp
-  python main.py --audio call001.wav --skip-noise-cancel
+  # Fastest demo (no extra packages needed):
+  python main.py --audio "echoguard/audio/call001.wav" --skip-diarization --skip-deepfake
+
+  # With speaker diarization (needs pyannote.audio + HF_TOKEN):
+  python main.py --audio "echoguard/audio/call001.wav" --speakers 2
+
+  # Full pipeline minus deepfake (no .pth needed):
+  python main.py --audio "echoguard/audio/call001.wav" --speakers 2 --skip-deepfake
+
+  # Skip noise cancellation:
+  python main.py --audio "echoguard/audio/call001.wav" --skip-noise-cancel
         """,
     )
-    parser.add_argument(
-        "--audio",
-        required=True,
-        metavar="PATH",
-        help="Path to the input WAV audio file.",
-    )
-    parser.add_argument(
-        "--model",
-        default="base",
-        metavar="SIZE",
-        choices=["tiny", "base", "small", "medium", "large"],
-        help="Whisper model size (default: base).",
-    )
-    parser.add_argument(
-        "--speakers",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Hint: number of speakers in the call (optional).",
-    )
-    parser.add_argument(
-        "--hf-token",
-        default=None,
-        metavar="TOKEN",
-        help="HuggingFace token for pyannote (or set HF_TOKEN env var).",
-    )
-    parser.add_argument(
-        "--deepfake-weights",
-        default=None,
-        metavar="PATH",
-        help="Path to AASIST .pth weight file.",
-    )
-    parser.add_argument(
-        "--context-index",
-        default=None,
-        metavar="DIR",
-        help="Path to saved FAISS context index directory.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default="echoguard/outputs",
-        metavar="DIR",
-        help="Output directory for results (default: echoguard/outputs).",
-    )
-    parser.add_argument(
-        "--skip-noise-cancel",
-        action="store_true",
-        help="Skip noise cancellation (step 0).",
-    )
-    parser.add_argument(
-        "--noise-cancel-strategy",
-        default="dsp",
-        metavar="STRATEGY",
-        choices=["auto", "speechbrain", "dsp"],
-        help="Noise cancellation strategy: auto | speechbrain | dsp (default: dsp).",
-    )
-    parser.add_argument(
-        "--skip-diarization",
-        action="store_true",
-        help="Skip speaker diarization and use plain Whisper transcription.",
-    )
-    parser.add_argument(
-        "--skip-emotion",
-        action="store_true",
-        help="Skip emotion analysis.",
-    )
-    parser.add_argument(
-        "--skip-deepfake",
-        action="store_true",
-        help="Skip deepfake detection.",
-    )
-    parser.add_argument(
-        "--skip-context",
-        action="store_true",
-        help="Skip FAISS context retrieval.",
-    )
+    parser.add_argument("--audio", required=True, metavar="PATH",
+                        help="Path to the input WAV audio file.")
+    parser.add_argument("--model", default="base", metavar="SIZE",
+                        choices=["tiny", "base", "small", "medium", "large"],
+                        help="Whisper model size (default: base).")
+    parser.add_argument("--speakers", type=int, default=None, metavar="N",
+                        help="Number of speakers in the call (optional hint).")
+    parser.add_argument("--hf-token", default=None, metavar="TOKEN",
+                        help="HuggingFace token for pyannote (or set HF_TOKEN env var).")
+    parser.add_argument("--deepfake-weights", default=None, metavar="PATH",
+                        help="Path to AASIST .pth weight file.")
+    parser.add_argument("--context-index", default=None, metavar="DIR",
+                        help="Path to saved FAISS index directory.")
+    parser.add_argument("--output-dir", default="echoguard/outputs", metavar="DIR",
+                        help="Output directory for results.")
+    parser.add_argument("--skip-noise-cancel", action="store_true",
+                        help="Skip noise cancellation (step 0).")
+    parser.add_argument("--noise-cancel-strategy", default="dsp",
+                        choices=["auto", "speechbrain", "dsp"], metavar="STRATEGY",
+                        help="Noise cancel strategy: dsp | speechbrain | auto (default: dsp).")
+    parser.add_argument("--skip-diarization", action="store_true",
+                        help="Use plain Whisper instead of speaker-diarized transcript.")
+    parser.add_argument("--skip-emotion", action="store_true",
+                        help="Skip emotion analysis.")
+    parser.add_argument("--skip-deepfake", action="store_true",
+                        help="Skip deepfake detection.")
+    parser.add_argument("--skip-context", action="store_true",
+                        help="Skip FAISS context retrieval.")
     return parser
 
 
 def main() -> None:
-    """CLI entry point."""
     parser = _build_parser()
     args = parser.parse_args()
-
     run_pipeline(
         audio_path=args.audio,
         whisper_model=args.model,

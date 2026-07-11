@@ -84,6 +84,16 @@ def _load_pipeline(model_id: str, hf_token: Optional[str]) -> object:
         )
 
     _pipeline = Pipeline.from_pretrained(model_id, use_auth_token=token)
+    if _pipeline is None:
+        raise ValueError(
+            f"Failed to load pipeline '{model_id}'.\n"
+            "This usually means the token is invalid or you haven't accepted "
+            "the model terms.\n"
+            "1. Visit https://hf.co/pyannote/speaker-diarization-3.1 and accept terms\n"
+            "2. Visit https://hf.co/pyannote/segmentation-3.0 and accept terms\n"
+            "3. Create a token at https://huggingface.co/settings/tokens\n"
+            "4. export HF_TOKEN=your_token"
+        )
     return _pipeline
 
 
