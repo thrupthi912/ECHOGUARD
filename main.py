@@ -39,7 +39,13 @@ from typing import Dict, Optional
 
 # Disable SSL cert verification for corporate/university proxy networks.
 # Must be imported before any huggingface_hub / requests calls.
-import echoguard.utils.ssl_patch  # noqa: F401
+# Import directly (not via package __init__) to avoid triggering eager numpy imports.
+import importlib.util as _ilu, sys as _sys
+_spec = _ilu.spec_from_file_location(
+    "ssl_patch",
+    __import__("pathlib").Path(__file__).parent / "echoguard" / "utils" / "ssl_patch.py"
+)
+_mod = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_mod)  # type: ignore
 
 
 def run_pipeline(
